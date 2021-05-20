@@ -8,6 +8,7 @@ package viper
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -81,6 +82,9 @@ var jsonExample = []byte(`{
                 { "type": "Chocolate" },
                 { "type": "Blueberry" },
                 { "type": "Devil's Food" }
+            ],
+			"topping": [
+				"Icing","Chocolate"
             ]
     }
 }`)
@@ -1184,6 +1188,62 @@ func TestFindsNestedKeys(t *testing.T) {
 	}
 }
 
+func TestSurgicalPathUpdateFromEnv(t *testing.T) {
+	v := New()
+	v.SetConfigType("json")
+	v.ReadConfig(bytes.NewBuffer(jsonExample))
+	t.Log(v.AllKeys())
+	dst := v.AllSettings()
+	fmt.Println(PrettyJSON(dst))
+	t.Log(dst)
+
+	expected := []interface{}{"Icing", "Chocolate"}
+	actual := v.Get("batters.topping")
+	assert.Equal(t, expected, actual)
+
+	actual = v.Get("batters.batter")
+	expected = []interface{}{map[string]interface{}{"type": "Regular"}, map[string]interface{}{"type": "Chocolate"}, map[string]interface{}{"type": "Blueberry"}, map[string]interface{}{"type": "Devil's Food"}}
+	assert.Equal(t, expected, actual)
+
+	actual = v.Get("batters.doesnotexist")
+	assert.Nil(t, actual)
+
+	os.Setenv("batters.doesnotexist", "ted")
+	os.Setenv("batters.batter.0.type", "bob")
+	os.Setenv("batters.topping.1.", "frosting")
+	v.SurgicalPathUpdateFromEnv()
+
+	os.Remove("batters.doesnotexist")
+	os.Remove("batters.batter.0.type")
+	os.Remove("batters.topping.1.")
+
+	fmt.Println(PrettyJSON(dst))
+	t.Log(dst)
+
+	expected = []interface{}{"Icing", "frosting"}
+	actual = v.Get("batters.topping")
+	assert.Equal(t, expected, actual)
+
+	actual = v.Get("batters.batter")
+	expected = []interface{}{map[string]interface{}{"type": "bob"}, map[string]interface{}{"type": "Chocolate"}, map[string]interface{}{"type": "Blueberry"}, map[string]interface{}{"type": "Devil's Food"}}
+	assert.Equal(t, expected, actual)
+
+	actual = v.Get("batters.doesnotexist")
+	assert.Nil(t, actual)
+
+	fmt.Println(PrettyJSON(actual))
+
+	t.Log(dst)
+}
+
+// PrettyJSON to string
+func PrettyJSON(obj interface{}) string {
+	jsonBytes, err := json.MarshalIndent(obj, "", "    ")
+	if err != nil {
+		panic(err)
+	}
+	return string(jsonBytes)
+}
 func TestReadBufConfig(t *testing.T) {
 	v := New()
 	v.SetConfigType("yaml")

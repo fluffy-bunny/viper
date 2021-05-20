@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -227,4 +228,175 @@ func deepSearch(m map[string]interface{}, path []string) map[string]interface{} 
 		m = m3
 	}
 	return m
+}
+
+// finds potential candidates that match a deep update
+// i.e. if keyDelim == "__"  a__b__0__c__d__1__e=1234, a:{b:[]{{c:{d:[]{{e:1111},{e:4444}}}}}}, would be targeting the e:4444 value
+func getPotentialEnvVariables(keyDelim string) map[string]string {
+	var result map[string]string
+	result = make(map[string]string)
+	for _, element := range os.Environ() {
+		variable := strings.Split(element, "=")
+		if strings.Contains(variable[0], keyDelim) {
+			result[variable[0]] = variable[1]
+		}
+	}
+	return result
+}
+
+// pathFindNoCreate will return the interface to the data if it exists, nil otherwise
+func pathFindNoCreate(keyDelim string, key string, src map[string]interface{}) interface{} {
+	lcaseKey := strings.ToLower(key)
+	path := strings.Split(lcaseKey, keyDelim)
+
+	lastKey := strings.ToLower(path[len(path)-1])
+
+	fmt.Println(lastKey)
+	path = path[0 : len(path)-1]
+	if len(lastKey) == 0 {
+		// we are targeting an array that contains a primitive
+		deepestArray, idx := deepSearchArrayNoCreate(src, path)
+		if deepestArray != nil && idx > -1 {
+			return deepestArray[idx]
+		}
+		return nil
+	} else {
+		deepestMap := deepSearchNoCreate(src, path)
+		if deepestMap != nil {
+			return deepestMap[lastKey]
+		}
+		return nil
+
+	}
+}
+
+// Like deepSearch, but doesn't create anything.  Returns nil if not present
+func deepSearchNoCreate(m map[string]interface{}, path []string) map[string]interface{} {
+	var currentPath string
+	var stepArray bool = false
+	var currentArray []interface{}
+	for _, k := range path {
+		if len(currentPath) == 0 {
+			currentPath = k
+		} else {
+			currentPath = fmt.Sprintf("%v.%v", currentPath, k)
+		}
+		if stepArray {
+			idx, err := strconv.Atoi(k)
+			if err != nil {
+				return nil
+			}
+			if len(currentArray) <= idx {
+				return nil
+			}
+			m3, ok := currentArray[idx].(map[string]interface{})
+			if !ok {
+				return nil
+			}
+			// continue search from here
+			m = m3
+			stepArray = false // don't support arrays of arrays
+		} else {
+			m2, ok := m[k]
+			if !ok {
+				// intermediate key does not exist
+				return nil
+			}
+			m3, ok := m2.(map[string]interface{})
+			if !ok {
+				// is this an array
+				m4, ok := m2.([]interface{})
+				if ok {
+					currentArray = m4
+					stepArray = true
+					m3 = nil
+				} else {
+					// intermediate key is a value
+					return nil
+
+				}
+			}
+			// continue search from here
+			m = m3
+
+		}
+	}
+	return m
+}
+
+// Like deepSearch, but doesn't create anything.  Returns nil if not present
+func deepSearchArrayNoCreate(m map[string]interface{}, path []string) ([]interface{}, int) {
+	var currentPath string
+	var stepArray bool = false
+	var currentArray []interface{}
+	var currentIdx int = -1
+	var err error
+	pathDepth := len(path)
+	for currentPathIdx, k := range path {
+		if len(currentPath) == 0 {
+			currentPath = k
+		} else {
+			currentPath = fmt.Sprintf("%v.%v", currentPath, k)
+		}
+		if stepArray {
+			currentIdx, err = strconv.Atoi(k)
+			if err != nil {
+				return nil, -1
+			}
+			if len(currentArray) <= currentIdx {
+				return nil, -1
+			}
+			m2 := currentArray[currentIdx]
+			stepArray = false
+
+			m3, ok := m2.(map[string]interface{})
+			if !ok {
+				// is this an array
+				m4, ok := m2.([]interface{})
+				if ok {
+					currentArray = m4
+					stepArray = true
+					m3 = nil
+				} else {
+					if currentPathIdx == pathDepth-1 {
+						// end of the line
+						continue
+					} else {
+
+						return nil, -1
+					}
+
+				}
+			}
+			// continue search from here
+			m = m3
+
+		} else {
+			m2, ok := m[k]
+			if !ok {
+				// intermediate key does not exist
+				return nil, -1
+			}
+			m3, ok := m2.(map[string]interface{})
+			if !ok {
+				// is this an array
+				m4, ok := m2.([]interface{})
+				if ok {
+					currentArray = m4
+					stepArray = true
+					m3 = nil
+				} else {
+					// intermediate key is a value
+					// => replace with a new map
+					m3 = make(map[string]interface{})
+					m[k] = m3
+
+				}
+			}
+			// continue search from here
+			m = m3
+
+		}
+	}
+	return currentArray, currentIdx
 }

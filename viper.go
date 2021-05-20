@@ -1440,6 +1440,42 @@ func (v *Viper) ReadInConfig() error {
 	return nil
 }
 
+// SurgicalPathUpdateFromEnv does a deep update of exiting config.
+func SurgicalPathUpdateFromEnv() error { return v.SurgicalPathUpdateFromEnv() }
+func (v *Viper) SurgicalPathUpdateFromEnv() error {
+	potential := getPotentialEnvVariables(v.keyDelim)
+	for key, value := range potential {
+		v.SurgicalPathUpdate(key, value)
+	}
+	return nil
+}
+
+// SurgicalPathUpdate will update the value if it exists
+func (v *Viper) SurgicalPathUpdate(key string, value interface{}) {
+	lcaseKey := strings.ToLower(key)
+	path := strings.Split(lcaseKey, v.keyDelim)
+	dst := v.AllSettings()
+	lastKey := strings.ToLower(path[len(path)-1])
+
+	path = path[0 : len(path)-1]
+	if len(lastKey) == 0 {
+		// we are targeting an array that contains a primitive
+		deepestArray, idx := deepSearchArrayNoCreate(dst, path)
+		if deepestArray != nil && idx > -1 {
+			deepestArray[idx] = value
+		}
+	} else {
+		deepestMap := deepSearchNoCreate(dst, path)
+		if deepestMap != nil {
+			// set innermost value
+			_, ok := deepestMap[lastKey]
+			if ok {
+				deepestMap[lastKey] = value
+			}
+		}
+	}
+}
+
 // MergeInConfig merges a new configuration with an existing config.
 func MergeInConfig() error { return v.MergeInConfig() }
 
