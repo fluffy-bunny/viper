@@ -52,7 +52,7 @@ import (
 
 // ConfigMarshalError happens when failing to marshal the configuration.
 type ConfigMarshalError struct {
-	err error
+	err error 
 }
 
 // Error returns the formatted configuration error.
