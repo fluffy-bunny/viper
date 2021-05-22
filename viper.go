@@ -52,7 +52,7 @@ import (
 
 // ConfigMarshalError happens when failing to marshal the configuration.
 type ConfigMarshalError struct {
-	err error 
+	err error
 }
 
 // Error returns the formatted configuration error.
@@ -1495,30 +1495,10 @@ func (v *Viper) MergeInDeepPaths(key string, value interface{}) {
 		configValue, ok := deepestMap[lastKey]
 		if ok {
 			switch configValue.(type) {
-			case bool:
-				deepestMap[lastKey] = cast.ToString(value)
 			case string:
 				deepestMap[lastKey] = cast.ToString(value)
-			case int32, int16, int8, int:
-				deepestMap[lastKey] = cast.ToInt(value)
-			case uint:
-				deepestMap[lastKey] = cast.ToUint(value)
-			case uint32:
-				deepestMap[lastKey] = cast.ToUint32(value)
-			case uint64:
-				deepestMap[lastKey] = cast.ToUint64(value)
-			case int64:
-				deepestMap[lastKey] = cast.ToInt64(value)
-			case float64, float32:
+			default:
 				deepestMap[lastKey] = cast.ToFloat64(value)
-			case time.Time:
-				deepestMap[lastKey] = cast.ToTime(value)
-			case time.Duration:
-				deepestMap[lastKey] = cast.ToDuration(value)
-			case []string:
-				deepestMap[lastKey] = cast.ToStringSlice(value)
-			case []int:
-				deepestMap[lastKey] = cast.ToIntSlice(value)
 			}
 
 		}
