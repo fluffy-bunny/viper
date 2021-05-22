@@ -1440,37 +1440,96 @@ func (v *Viper) ReadInConfig() error {
 	return nil
 }
 
-// SurgicalPathUpdateFromEnv does a deep update of exiting config.
-func SurgicalPathUpdateFromEnv() error { return v.SurgicalPathUpdateFromEnv() }
-func (v *Viper) SurgicalPathUpdateFromEnv() error {
+// MergeInDeepPathsFromEnv does a deep update of exiting config.
+func MergeInDeepPathsFromEnv() error { return v.MergeInDeepPathsFromEnv() }
+func (v *Viper) MergeInDeepPathsFromEnv() error {
 	potential := getPotentialEnvVariables(v.keyDelim)
 	for key, value := range potential {
-		v.SurgicalPathUpdate(key, value)
+		v.MergeInDeepPaths(key, value)
 	}
 	return nil
 }
 
-// SurgicalPathUpdate will update the value if it exists
-func (v *Viper) SurgicalPathUpdate(key string, value interface{}) {
+// MergeInDeepPaths updates value if it exists
+func (v *Viper) MergeInDeepPaths(key string, value interface{}) {
 	lcaseKey := strings.ToLower(key)
 	path := strings.Split(lcaseKey, v.keyDelim)
-	dst := v.AllSettings()
 	lastKey := strings.ToLower(path[len(path)-1])
 
 	path = path[0 : len(path)-1]
 	if len(lastKey) == 0 {
-		// we are targeting an array that contains a primitive
-		deepestArray, idx := deepSearchArrayNoCreate(dst, path)
-		if deepestArray != nil && idx > -1 {
-			deepestArray[idx] = value
+		return
+	}
+
+	// try override first
+	deepestEntity := deepSearchNoCreate(v.override, path)
+	if deepestEntity != nil {
+		dm, ok := deepestEntity.(map[string]interface{})
+		if ok {
+			_, ok = dm[lastKey]
+			if !ok {
+				deepestEntity = nil
+			}
+		} else {
+			da, ok := deepestEntity.([]interface{})
+			if ok {
+				// lastKey has to be a num
+				idx, err := strconv.Atoi(lastKey)
+				if !(err == nil && (idx >= 0 && idx < len(da))) {
+					deepestEntity = nil
+
+				}
+			}
+		}
+	}
+	if deepestEntity == nil {
+		// TODO: overrides and arrays are tricky, so for no change the value in the original config
+		deepestEntity = deepSearchNoCreate(v.config, path)
+	}
+	if deepestEntity == nil {
+		return
+	}
+	deepestMap, ok := deepestEntity.(map[string]interface{})
+	if ok {
+		// set innermost value
+		configValue, ok := deepestMap[lastKey]
+		if ok {
+			switch configValue.(type) {
+			case bool:
+				deepestMap[lastKey] = cast.ToString(value)
+			case string:
+				deepestMap[lastKey] = cast.ToString(value)
+			case int32, int16, int8, int:
+				deepestMap[lastKey] = cast.ToInt(value)
+			case uint:
+				deepestMap[lastKey] = cast.ToUint(value)
+			case uint32:
+				deepestMap[lastKey] = cast.ToUint32(value)
+			case uint64:
+				deepestMap[lastKey] = cast.ToUint64(value)
+			case int64:
+				deepestMap[lastKey] = cast.ToInt64(value)
+			case float64, float32:
+				deepestMap[lastKey] = cast.ToFloat64(value)
+			case time.Time:
+				deepestMap[lastKey] = cast.ToTime(value)
+			case time.Duration:
+				deepestMap[lastKey] = cast.ToDuration(value)
+			case []string:
+				deepestMap[lastKey] = cast.ToStringSlice(value)
+			case []int:
+				deepestMap[lastKey] = cast.ToIntSlice(value)
+			}
+
 		}
 	} else {
-		deepestMap := deepSearchNoCreate(dst, path)
-		if deepestMap != nil {
-			// set innermost value
-			_, ok := deepestMap[lastKey]
-			if ok {
-				deepestMap[lastKey] = value
+		// is this an array
+		deepestArray, ok := deepestEntity.([]interface{})
+		if ok {
+			// lastKey has to be a num
+			idx, err := strconv.Atoi(lastKey)
+			if err == nil {
+				deepestArray[idx] = value
 			}
 		}
 	}

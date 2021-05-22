@@ -72,21 +72,33 @@ TYPE_DOTENV=donut
 NAME_DOTENV=Cake`)
 
 var jsonExample = []byte(`{
-"id": "0001",
-"type": "donut",
-"name": "Cake",
-"ppu": 0.55,
-"batters": {
-        "batter": [
-                { "type": "Regular" },
-                { "type": "Chocolate" },
-                { "type": "Blueberry" },
-                { "type": "Devil's Food" }
-            ],
-			"topping": [
-				"Icing","Chocolate"
-            ]
-    }
+	"id": "0001",
+	"type": "donut",
+	"name": "Cake",
+	"ppu": 0.55,
+	"baker": {
+		"name": "Baker McBakerFace",
+		"rating": 4.5,
+		"someint": 4
+	},
+	"batters": {
+		"batter": [{
+				"type": "Regular"
+			},
+			{
+				"type": "Chocolate"
+			},
+			{
+				"type": "Blueberry"
+			},
+			{
+				"type": "Devil's Food"
+			}
+		],
+		"topping": [
+			"Icing", "Chocolate"
+		]
+	}
 }`)
 
 var hclExample = []byte(`
@@ -1208,21 +1220,52 @@ func TestSurgicalPathUpdateFromEnv(t *testing.T) {
 	actual = v.Get("batters.doesnotexist")
 	assert.Nil(t, actual)
 
-	os.Setenv("batters.doesnotexist", "ted")
-	os.Setenv("batters.batter.0.type", "bob")
-	os.Setenv("batters.topping.1.", "frosting")
-	v.SurgicalPathUpdateFromEnv()
+	expectedString := "Baker McBakerFace"
+	actual = v.Get("baker.name")
+	assert.Equal(t, expectedString, actual)
 
-	os.Remove("batters.doesnotexist")
-	os.Remove("batters.batter.0.type")
-	os.Remove("batters.topping.1.")
+	v.Set("baker.name", "Porky Pig")
+	expectedString = "Porky Pig"
+	actual = v.Get("baker.name")
+	assert.Equal(t, expectedString, actual)
 
+	var expectedFloat64 float64 = 4.5
+	actual = v.Get("baker.rating")
+	assert.Equal(t, expectedFloat64, actual)
+
+	var envs = map[string]string{
+		"doesnotexit":              "garbage",
+		"doesnotexit.doesnotexist": "garbage",
+		"batters":                  "garbage",
+		"batters.doesnotexist":     "garbage",
+		"batters.batter.0.type":    "bob",
+		"batters.topping.1":        "frosting",
+		"batters.topping.1.":       "frosting-garbage",
+		"baker.name":               "Bready McBreadyFace",
+		"baker.rating":             "6.7",
+		"baker.someint":            "6",
+	}
+
+	for k, v := range envs {
+		os.Setenv(k, v)
+	}
+
+	v.MergeInDeepPathsFromEnv()
+
+	for k := range envs {
+		os.Remove(k)
+	}
+	dst = v.AllSettings()
 	fmt.Println(PrettyJSON(dst))
 	t.Log(dst)
 
-	expected = []interface{}{"Icing", "frosting"}
-	actual = v.Get("batters.topping")
-	assert.Equal(t, expected, actual)
+	expectedString = "Bready McBreadyFace"
+	actual = v.Get("baker.name")
+	assert.Equal(t, expectedString, actual)
+
+	expectedFloat64 = 6.7
+	actual = v.Get("baker.rating")
+	assert.Equal(t, expectedFloat64, actual)
 
 	actual = v.Get("batters.batter")
 	expected = []interface{}{map[string]interface{}{"type": "bob"}, map[string]interface{}{"type": "Chocolate"}, map[string]interface{}{"type": "Blueberry"}, map[string]interface{}{"type": "Devil's Food"}}
