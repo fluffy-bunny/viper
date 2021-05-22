@@ -1200,7 +1200,7 @@ func TestFindsNestedKeys(t *testing.T) {
 	}
 }
 
-func TestSurgicalPathUpdateFromEnv(t *testing.T) {
+func TestMergeInDeepPathsFromEnv(t *testing.T) {
 	v := New()
 	v.SetConfigType("json")
 	v.ReadConfig(bytes.NewBuffer(jsonExample))

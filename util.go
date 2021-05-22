@@ -279,17 +279,12 @@ func deepSearchNoCreate(m map[string]interface{}, path []string) interface{} {
 	if len(path) == 0 {
 		return m
 	}
-	var currentPath string
+
 	var stepArray bool = false
 	var currentArray []interface{}
 	var currentEntity interface{}
 	for _, k := range path {
 
-		if len(currentPath) == 0 {
-			currentPath = k
-		} else {
-			currentPath = fmt.Sprintf("%v.%v", currentPath, k)
-		}
 		if stepArray {
 			idx, err := strconv.Atoi(k)
 			if err != nil {
@@ -305,7 +300,7 @@ func deepSearchNoCreate(m map[string]interface{}, path []string) interface{} {
 			// continue search from here
 			m = m3
 			currentEntity = m
-			stepArray = false // don't support arrays of arrays
+			stepArray = false
 		} else {
 			m2, ok := m[k]
 			if !ok {
@@ -323,7 +318,7 @@ func deepSearchNoCreate(m map[string]interface{}, path []string) interface{} {
 					stepArray = true
 					m3 = nil
 				} else {
-					// intermediate key is a value
+					// not an array
 					return nil
 				}
 			} else {
